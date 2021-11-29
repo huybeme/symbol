@@ -1,0 +1,196 @@
+COMP-525 Compilers
+Project: Finish the syntactic parser and construct a symbol table
+Fall 2021
+
+Objective:
+
+Building upon your previous assignment, write a parser.c that recognizes the rest of the BNF for C.  This is listed below.  Your program should run in two "passes".  The first pass should parse but *not* evaluate, but instead should put together a symbol table and a bracket table.
+
+Parsing
+
+Your program should be able to parse (but not evaluate) programs that include:
+	functions
+	parameters
+	function calls
+	global and local variable definitions
+	array definitions and lookups
+	for statements
+	while statements
+	if and if/else statements
+	the break, return, and continue key words.
+
+Most importantly, your program should handle compound statements that consist of { and } brackets.  For the purposes of this assignment, these brackets are mandatory for all functions, if, while, and for statements.
+
+Testing:  you should write a program consisting of each of these components and run it through your parser.  Your parser should print out a message when it recognizes the token, but not actually take any action.  
+
+Include a variable pass.  When you call your parser for pass 1, it should not do evaluation but should build the tables below.  When you call it for pass 2, it will do the evaluation as detailed in the next assignment.
+
+Bracket Table
+
+The bracket table is a hash table with an entry for each { and } in the program.  Each { should have a reference to the pointer value immediately following the matching }.  You will use this later to leave if, for, and while loops and break statements.  Each } should have a reference to the matching {.  You will use this to loop back to the beginning of for and while loops.
+
+Implement this in your compiler pass 1 with a bracket stack.  When you see a {, push its pointer address onto the stack.  When you see a }, remove it from the stack.
+
+Make two arrays:
+int bracket_table_index[MAX_SIZE];
+int bracket_table_value[MAX_SIZE];
+
+When you reach a }, put the {'s address as the value for the }'s index.  Then call next(), and put the }'s pointer value for the {'s index
+
+Symbol Table
+
+The symbol table has an entry for each function and variable in the program.  Each entry should store:
+	- the variable's name as a string
+	- its type
+	- its scope (the pointer value of the { that is on top of the stack when the variable was encountered)
+	- whether its a function or a variable
+
+In pass 1, every time you parse a variable, add it to the symbol table.
+
+Example
+
+Given the following program, my solution prints the following.
+
+
+input:
+
+int hi;
+int main(int squawk)
+{
+	int happy;
+	char sad=5;
+
+	if(1==2)
+	{
+		if(1)
+		{
+		}
+	}
+	else
+	{
+	}
+}
+float aglobalvar=3.7;
+char anotherglobalvar='a';
+float test(char ugh, float yay)
+{
+}
+
+output:
+
+1   29 {    8
+2   68 {    5
+3   80 {    4
+4   84 }    3
+5   87 }    2
+6   96 {    7
+7   99 }    6
+8   101 }   1
+9   184 {   10
+10  186 }   9
+
+    Top line is inner most {}. the } points to { so the end points to the beginning.
+    Then the next line points from the beginning to the next opening bracket.
+    so } 84 points to { 80. then { 80 points to } 87. closing } 87 points to opening { 68.
+    It seems like some of these ptrs do not point to a {}. numbers 188 and 90
+
+BRACKET_TABLE:
+	bracket at 84 points to 80
+	bracket at 80 points to 87
+	bracket at 87 points to 68
+	bracket at 68 points to 90
+	bracket at 99 points to 96
+	bracket at 96 points to 101
+	bracket at 101 points to 29
+	bracket at 29 points to 103
+	bracket at 186 points to 184
+	bracket at 184 points to 188
+
+
+SYMBOL TABLE (10):
+	variable 	int hi global
+	function int main global
+	variable 	int squawk local to 16
+	variable 	int happy local to 29
+	variable 	char sad local to 29
+	variable 	float aglobalvar global
+	variable 	char anotherglobalvar global
+	function float test global
+	variable 	char ugh local to 162
+	variable 	float yay local to 162
+
+	variable or function    type    variable    location (either global of to ptr?)
+
+
+
+BNF for some of C:
+
+<program> ::= { <function> | <declaration> }*
+
+<declaration> ::= <declaration-specifier> <identifier> { [ <expression> ] }* { = <expression> }? ;
+
+<function> ::= <declaration-specifier> <identifier> ( <parameter-list> ) <compound-statement>
+
+<declaration-specifier> ::= <type> { * }*
+
+<parameter-list> ::= <parameter-declaration> { , <parameter-declaration> }*
+
+<parameter-declaration> ::= <declaration-specifier> <identifier>
+
+<type> ::= int | float | char | void
+
+<postfix-expression> ::= <primary-expression> { 
+								[ <expression> ]
+							|	( <expression> { , <expression> }* )
+							|	++
+							|	--
+						}*
+
+<unary-expression> ::= { <unary_operator> }? <postfix-expression>
+
+<unary-operator> ::= + | - | & | * | !
+
+<multiplicative-expression> ::= <unary-expression> 
+								{ <multiplicative-operator> <unary-expression> }*
+
+<multiplicative-operator> ::= * | / | %
+
+<additive-operator> ::= + | -
+
+<relational-operator> ::= < | <= | > | >= | == | !=
+
+<logical-operator> ::= && | ||
+
+<assignment-operator> ::= = | += | -=
+
+<additive-expression> ::= <multiplicative-expression>
+							{ <additive-operator> <multiplicative-expression> }*
+
+<relational-expression> ::= <additive-expression>
+							{ <relational-operator> <additive-expression> }*
+
+<logical-expression> ::= <relational-expression>
+						{ <logical-operator> <relational-expression> }*
+
+<expression> ::= { <identifier> <assignment-operator> }? <logical-expression>
+
+<primary-expression> ::= <identifier> | <string> | <integer> | <char> | <float>
+						 |  ( <expression> ) 
+
+<expression-statement> ::= <expression> ;
+
+<if-statement> ::= if ( <expression> ) <statement> { else <statement> }?
+
+<while-statement> ::= while ( <expression> ) <statement>
+
+<for-statement> ::= for ( {<expression>}? ; {<expression>}? ; {<expression>}? ) <statement>
+
+<compound-statement> ::= {  { <declaration> | <statement> }*   }
+
+<jump-statement> ::= continue ;
+					| break ;
+					| return { <expression> }? ;
+
+<statement> ::= <if-statement> | <jump-statement> | <while-statement> | <for-statement> 
+				<expression-statement> | <compound-statement>
+
