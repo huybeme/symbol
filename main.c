@@ -286,10 +286,9 @@ void identifyNextToken(Token *token){
             accept(token, tptr, TYPE_INTEGER, input_string);
     }
         //check for identifiers (state 1)
-    else if ((input_string[ptr] >= 65 && input_string[ptr] <= 90) || (input_string[ptr] >= 97 && input_string[ptr] <= 122)){
-        while ((input_string[tptr] >= 65 && input_string[tptr] <= 90) || (input_string[tptr] >= 97 && input_string[tptr] <= 122) ||
-               (input_string[tptr] >= 48 && input_string[tptr] <= 57) || input_string[tptr] == '_' || input_string[tptr] == '.' ||
-               input_string[tptr] == '\n' || input_string[tptr] == '\t'){
+    else if ((input_string[ptr] >= 65 && input_string[ptr] <= 90) || (input_string[ptr] >= 97 && input_string[ptr] <= 122)){            // start with a letter
+        while ((input_string[tptr] >= 65 && input_string[tptr] <= 90) || (input_string[tptr] >= 97 && input_string[tptr] <= 122) ||     // if its a letter
+               (input_string[tptr] >= 48 && input_string[tptr] <= 57) || input_string[tptr] == '_' || input_string[tptr] == '.'){       // or digits, _, or .
             tptr++;
         }
         tptr--; // decrement due to while loop
@@ -682,10 +681,82 @@ int ParameterList(){
 }
 
 int Statement(){
-    Token t;
-    identifyNextToken(&t);
-    GetToken(&t);
-    printf("entering statement %s\n", t.str);
+    Token conditiontoken;
+    identifyNextToken(&conditiontoken);
+    GetToken(&conditiontoken);
+//    printf("entering statement %s\n", t.str);
+
+    if (strcmp(conditiontoken.str, "if") == 0 || strcmp(conditiontoken.str, "for") == 0 || strcmp(conditiontoken.str, "while") == 0){
+        ptr++;  // move to ( of expression of condition
+        Token t;
+        identifyNextToken(&t);
+        GetToken(&t);
+
+
+        if (strcmp(conditiontoken.str, "if") == 0){
+            printf("entering if statement\n");
+            int flag = Expression();    // flag will move ptr past closing )
+            identifyNextToken(&t);
+            GetToken(&t);
+//            printf("%s\n", t.str);
+
+            if (flag){
+                printf("    if condition is true\n");
+
+                Statement();    // do things inside if condition
+                while (strcmp(t.str, "}") != 0){
+                    ptr++;
+                    identifyNextToken(&t);
+                    GetToken(&t);
+                }
+
+                // by this point we should have closing }
+                ptr++;
+                identifyNextToken(&t);
+                GetToken(&t);
+                // if next token is an else, move past it, otherwise do nothing
+                if (strcmp(t.str, "else") == 0){
+                    while (strcmp(t.str, "}") != 0){
+                        ptr++;
+                        identifyNextToken(&t);
+                        GetToken(&t);
+                    }
+                    printf("    moved past else statement\n");  // should be at closing } by now
+                }
+
+            }   // end of if true
+            else {
+                // move ptr until past closing } for if condition
+                while (strcmp(t.str, "}") != 0){
+                    ptr++;
+                    identifyNextToken(&t);
+                    GetToken(&t);
+                }   // leave ptr off at closing } for if statement
+                ptr++;
+                identifyNextToken(&t);
+                GetToken(&t);
+                printf("%s  [%d]\n", t.str, ptr);
+
+                if (strcmp(t.str, "else") == 0) {
+                    printf("    if condition is false, entering else\n");
+                    Statement();    // do things inside else statement
+                }
+                else {
+                    printf("    no else condition following if statement\n");
+                    ptr--;  // decrement ptr back since we were only looking ahead for an else token
+                }
+            }
+
+        }// end if if statement
+        printf("left off here, %s   [%d]\n", t.str, ptr);
+        int saveptr = ptr;
+        while (ptr < input_length){
+            printf("%c", input_string[ptr]);
+            ptr++;
+        }
+        ptr = saveptr;
+
+    }
 
 }
 
