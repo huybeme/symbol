@@ -258,11 +258,13 @@ void identifyNextToken(Token *token){
             if (input_string[tptr] == '\0') // no ending quotes, syntax error
                 break;
         }
-        if (input_string[ptr] == input_string[tptr])
+
+        if (input_string[ptr] == input_string[tptr]) {
             accept(token, tptr, TYPE_STRING, input_string);
+        }
         else {
             accept(token, tptr, TYPE_INVALID, input_string);
-            printf("2___%d\n", tptr);
+            printf("2___[%d]%s\n", tptr, token->str);
         }
     }
         // check for integers   -- need to check for hexidecimals
@@ -301,7 +303,7 @@ void identifyNextToken(Token *token){
     }
     else{
         accept(token, tptr, TYPE_INVALID, input_string);
-        printf("3___%d\n", tptr);
+        printf("3___[%d]    %s\n", tptr, token->str);
     }
 
 }
@@ -340,7 +342,6 @@ int PrimaryExpression(){
     identifyNextToken(&t);
     GetToken(&t);
 
-    GetToken(&t);
     printf("got %s: %s    [%d]\n", getType(t.type), t.str, ptr);
 
     if (strcmp(getType(t.type), "TYPE_INTEGER") == 0){
@@ -399,9 +400,11 @@ int UnaryExpression(){
 
     // if !0, return 0 and if !# then return the #
 
+    int saveptr = ptr;
     Token prevtoken;
     identifyNextToken(&prevtoken);
     GetToken(&prevtoken);
+    ptr = saveptr;
 
     int firstvalue = PostFixExpression();
 
@@ -533,9 +536,13 @@ int RelationalExpression(){
         else
             ptr--;
 
+        if (input_string[ptr] == '"' || (input_string[ptr] == '\''))    // hard fix for type string or char, stack smash error
+            ptr++;
+
         Token reltoken;
         identifyNextToken(&reltoken);
         GetToken(&reltoken);
+
 
         if (strcmp(reltoken.str, "<") == 0 || strcmp(reltoken.str, "<=") == 0 || strcmp(reltoken.str, "==") == 0
             || strcmp(reltoken.str, "!=") == 0 || strcmp(reltoken.str, ">") == 0 || strcmp(reltoken.str, ">=") == 0){
@@ -578,10 +585,18 @@ int LogicalExpression(){
         else
             ptr--;
 
+
+        if (input_string[ptr] == '"' || (input_string[ptr] == '\'') || (input_string[ptr] == '.'))    // hard fix for type string or char, stack smash error
+            ptr++;
+
         Token logtoken;
         identifyNextToken(&logtoken);
         GetToken(&logtoken);
+
+
+
 //        printf("%s  [%d]\n", logtoken.str, ptr);
+
 
         if (strcmp(logtoken.str, "&&") == 0 || strcmp(logtoken.str, "||") == 0){
             printf("    logical operator: %s     [%d]\n", logtoken.str, ptr);
@@ -611,6 +626,7 @@ int LogicalExpression(){
 int Expression(){
 
     int firstvalue = LogicalExpression();
+
     printf("\tanswer is: %d     [%d]\n", firstvalue, ptr);
 
 
@@ -747,14 +763,14 @@ int Statement(){
                 }
             }
 
-        }// end if if statement
-        printf("left off here, %s   [%d]\n", t.str, ptr);
-        int saveptr = ptr;
-        while (ptr < input_length){
-            printf("%c", input_string[ptr]);
-            ptr++;
-        }
-        ptr = saveptr;
+        }// end of if statement
+//        printf("left off here, %s   [%d]\n", t.str, ptr);
+//        int saveptr = ptr;
+//        while (ptr < input_length){
+//            printf("%c", input_string[ptr]);
+//            ptr++;
+//        }
+//        ptr = saveptr;
 
     }
 
@@ -825,11 +841,11 @@ int Function(){
 
 int Program(){
 
+    // collect global variables until we hit a function
     DecSpecifier();
     Identifier();
 
     Token t;
-
 
     while (ptr < input_length){
         identifyNextToken(&t);
@@ -844,10 +860,11 @@ int Program(){
     if (strcmp(t.str,"=") == 0 || strcmp(t.str,";") == 0){
         printf("got declaration token: %s\n", t.str);
 
-        if (strcmp(t.str, "=") == 0)
+        if (strcmp(t.str, "=") == 0) {
             Declaration();
+        }
         ptr++;
-        Program();
+        Program();  // maybe dont want to do this recursively. maybe keep finding global variables through a while loop?
     }
     else if (strcmp(t.str,"(") == 0){
         printf("got function token: %s\n", t.str);
@@ -928,12 +945,8 @@ int main(int argc, char* argv[]) {
     input_string[input_length] = 0;
     fclose(input_file);
 
-
 //    Expression();
 //    FindBracket();
-//    printf("%d", FindBracket());
-//    printf("%d\n", ptr);
-
     Program();
 
 //    printf("\n");
