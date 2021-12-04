@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 int Expression();   // prototyping
+int FindBracket();
 
 int check_if_exist(FILE *file, char* name)
 {
@@ -59,7 +60,6 @@ const char* getType(enum type t){
 
 // advances nexttoken
 void next(){
-    ptr++;
     while(input_string[ptr] == ' ' || input_string[ptr] == '\t' || input_string[ptr] == '\n')
         ptr++;
 }
@@ -326,26 +326,28 @@ int matchtype(int type){
     return 0;
 }
 
-//void GetToken(Token *t){
-//    while (strcmp(getType(t->type), "TYPE_WHITESPACE") == 0 ||
-//           strcmp(getType(t->type), "TYPE_COMMENT") == 0){
-//        ptr++;
-//        identifyNextToken(t);
-//
-//    }
-//}
+void GetToken(Token *t){
+    while (strcmp(getType(t->type), "TYPE_WHITESPACE") == 0 ||
+           strcmp(getType(t->type), "TYPE_COMMENT") == 0){
+        ptr++;
+        identifyNextToken(t);
+
+    }
+}
 
 int PrimaryExpression(){
 
     // get a token that is not a whitespace or comment
     Token t;
     identifyNextToken(&t);
+    GetToken(&t);
 
-    printf("got %s: %s    [%d]\n", getType(t.type), t.str, ptr);
+    GetToken(&t);
+//    printf("got %s: %s    [%d]\n", getType(t.type), t.str, ptr);
 
     if (strcmp(getType(t.type), "TYPE_INTEGER") == 0){
         // got integer so move ptr;
-        next();
+        ptr++;
         return atoi(t.str);
     }
     else if (strcmp(getType(t.type), "TYPE_FLOAT") == 0){
@@ -360,15 +362,15 @@ int PrimaryExpression(){
         else
             val = atoi(t.str);
 
-        next();
+        ptr++;
         return val;
     }
     else if (strcmp(getType(t.type), "TYPE_STRING") == 0){
-        next();
+        ptr++;
         return 0;
     }
     else if (strcmp(getType(t.type), "TYPE_CHAR") == 0){
-        next();
+        ptr++;
         // return decimal value here
         if (t.str[1] == '\\')
             return t.str[2];
@@ -376,11 +378,11 @@ int PrimaryExpression(){
             return t.str[1];
     }
     else if (strcmp(getType(t.type), "TYPE_IDENTIFIER") == 0){
-        next();
+        ptr++;
         return 0;
     }
     else if (strcmp(t.str, "(") == 0){
-        next();
+        ptr++;
         int val = Expression();
         return val;
     }
@@ -402,6 +404,7 @@ int UnaryExpression(){
     int saveptr = ptr;
     Token prevtoken;
     identifyNextToken(&prevtoken);
+    GetToken(&prevtoken);
     ptr = saveptr;
 
     int firstvalue = PostFixExpression();
@@ -409,23 +412,24 @@ int UnaryExpression(){
     if (matchtype(TYPE_OPERATOR) && (strcmp(getType(prevtoken.type), "TYPE_OPERATOR") == 0 || ptr == 0)){
         Token utoken;
         identifyNextToken(&utoken);
+        GetToken(&utoken);
 
 //        printf("(u) %s  %s\n", prevtoken.str, utoken.str);
 
         if (match("-", TYPE_OPERATOR)) {
             printf("    unary token: %s\n", utoken.str);
-            next();
+            ptr++;
             int nextvalue = PostFixExpression();
             return -nextvalue;
         }
 //        else if (match("+", TYPE_OPERATOR)){                  //
 //            printf("    unary token: %s\n", utoken.str);
-//            next();
+//            ptr++;
 //            int nextvalue = PostFixExpression();
 //            return nextvalue;
 //        }
         else if (match("!", TYPE_OPERATOR)){
-            next();
+            ptr++;
             int nextvalue = UnaryExpression();  // need to call unary for - token to check for negative numbers
             if (nextvalue == 0)
                 return 1;
@@ -437,7 +441,8 @@ int UnaryExpression(){
     if (firstvalue == -99){
         Token t;
         identifyNextToken(&t);
-        next();
+        GetToken(&t);
+        ptr++;
         printf("__either expression sums to -99 or you got an incorrect entry for primary expression__\n"
                "error token: %s\n"
                "note: if expresssion is a +number with no spaces, this error will also come up so space it out\n\n", t.str);
@@ -455,12 +460,13 @@ int MultiplicativeExpression(){
 
         Token optoken;
         identifyNextToken(&optoken);
+        GetToken(&optoken);
 
         if (match("*", TYPE_OPERATOR) || match("/", TYPE_OPERATOR) || match("%", TYPE_OPERATOR)){
             printf("    multi token: %s       [%d]\n", optoken.str, ptr);
 
             // move ptr to next token
-            next();
+            ptr++;
             int nextvalue = UnaryExpression();
 
 //            Token nexttoken;
@@ -491,16 +497,16 @@ int AdditiveExpression(){
 
         Token optoken;
         identifyNextToken(&optoken);
-
+        GetToken(&optoken);
 
 //        if  (match(")", TYPE_OPERATOR))     // move past ) when we get it
-//            next();
+//            ptr++;
 
         if (match("+", TYPE_OPERATOR) || match("-", TYPE_OPERATOR)){
             printf("    add token: %s       [%d]\n", optoken.str, ptr);
 
             // move ptr to next token and get its value
-            next();
+            ptr++;
             int nextvalue = MultiplicativeExpression();
 
 //            Token nexttoken;
@@ -529,21 +535,21 @@ int RelationalExpression(){
     while(1){
 
         if (match(")", TYPE_OPERATOR))     // move past ) when we get it
-            next();
+            ptr++;
         else
-            next();
+            ptr--;
 
         if (input_string[ptr] == '"' || (input_string[ptr] == '\'') || (input_string[ptr] == '.'))    // hard fix for type string or char, stack smash error
-            next();
+            ptr++;
 
         Token reltoken;
         identifyNextToken(&reltoken);
-
+        GetToken(&reltoken);
 
         if (strcmp(reltoken.str, "<") == 0 || strcmp(reltoken.str, "<=") == 0 || strcmp(reltoken.str, "==") == 0
             || strcmp(reltoken.str, "!=") == 0 || strcmp(reltoken.str, ">") == 0 || strcmp(reltoken.str, ">=") == 0){
             printf("    relational operator: %s     [%d]\n", reltoken.str, ptr);
-            next();
+            ptr++;
             int nextvalue = AdditiveExpression();
 
             if (strcmp(reltoken.str, "<") == 0)
@@ -575,22 +581,23 @@ int LogicalExpression(){
     while(1){
 
         if (match(")", TYPE_OPERATOR)) {     // move past ) when we get it
-            next();
+            ptr++;
             printf("    found closing ')' token\n");
         }
         else
             ptr--;
 
         if (input_string[ptr] == '"' || (input_string[ptr] == '\'') || (input_string[ptr] == '.'))    // hard fix for type string or char, stack smash error
-            next();
+            ptr++;
 
         Token logtoken;
         identifyNextToken(&logtoken);
+        GetToken(&logtoken);
 //        printf("%s  [%d]\n", logtoken.str, ptr);
 
         if (strcmp(logtoken.str, "&&") == 0 || strcmp(logtoken.str, "||") == 0){
             printf("    logical operator: %s     [%d]\n", logtoken.str, ptr);
-            next();
+            ptr++;
             int nextvalue = RelationalExpression();
 //            printf("%d  %d\n",firstvalue, nextvalue);
 
@@ -671,27 +678,27 @@ int DecSpecifier(){
 
     Token t;
     identifyNextToken(&t);
-
+    GetToken(&t);
 //    printf("%s\n", t.str);
     if (strcmp(getType(t.type), "TYPE_TYPE") == 0) {
         printf("got specifier: %s   [%d]\n", t.str, ptr);
         addsymbol(t, 2);
         printf("    got symbol type: %s  [%d]\n", symbol_table[symcount].type, symcount);
 
-//        next();
+//        ptr++;
 
         // see if we have a ptr * char after the type
 
-        next();
+        ptr++;
         int saveptr = ptr;
         Token star;
         identifyNextToken(&star);
-
+        GetToken(&star);
         if (strcmp(star.str, "*") == 0) {
             printf("\tgot * char pointer\n");
             strcat(symbol_table[symcount].type, star.str);
             printf("\tgot symbol %s\n", symbol_table[symcount].type);
-            next();
+            ptr++;
         }
         else
             ptr = saveptr;
@@ -708,13 +715,13 @@ int DecSpecifier(){
 int Identifier(){
     Token t;
     identifyNextToken(&t);
-
+    GetToken(&t);
     if (strcmp(getType(t.type), "TYPE_IDENTIFIER") == 0) {
         printf("got identifier: %s   [%d]\n", t.str, ptr);
         addsymbol(t, 1);
         printf("    updated symbol name to: %s  [%d]\n", symbol_table[symcount].name, symcount);
         symn = t.str;
-//        next();
+//        ptr++;
 
         return 1;
     }
@@ -732,8 +739,8 @@ int ParameterList(){
         Identifier();
 //        symcount--;     // this will not let parameter variables into sym table
         identifyNextToken(&t);
-
-        next();
+        GetToken(&t);
+        ptr++;
     }
 //    ptr--;
     printf("finished parameter list for function %s, ptr is before {\n", t.str);
@@ -742,7 +749,7 @@ int ParameterList(){
 int ifStatement(){
     Token t;
     identifyNextToken(&t);
-
+    GetToken(&t);
     int flag = 1;   // assume if will be true
     if (strcmp(t.str, "(") == 0){
         flag = Expression();       // does not print before and after relational operator but properly expresses
@@ -751,22 +758,22 @@ int ifStatement(){
         printf("no parameter expression for if\n");
     }
 
-    next();  // move passed ), careful with spacings, next token should be {
+    ptr++;  // move passed ), careful with spacings, next token should be {
 
     if(flag){
         printf("    if is true\n");
         identifyNextToken(&t);
-
+        GetToken(&t);
         if (strcmp(t.str, "{") == 0){
             while (strcmp(t.str, "}") != 0) {
-                next();
+                ptr++;
                 identifyNextToken(&t);
-
+                GetToken(&t);
                 Statement();
             }
         }
     }
-    exit(0);
+//    exit(0);
 }
 
 int Statement(){
@@ -774,12 +781,12 @@ int Statement(){
 
     Token conditiontoken;
     identifyNextToken(&conditiontoken);
-
+    GetToken(&conditiontoken);
     printf("    got condition token: %s\n", conditiontoken.str);
 
     if(strcmp(conditiontoken.str, "if") == 0){
         printf("    entering if statement\n");
-        next();  // move passed if token
+        ptr++;  // move passed if token
         ifStatement();
     }
     else{   // this will also handle expression statements, might need to change this to if token is {
@@ -787,7 +794,7 @@ int Statement(){
         CompoundStatement();
     }
 //    else if (strcmp(conditiontoken.str, "}") == 0){
-//        next();
+//        ptr++;
 //    }
 
 
@@ -796,23 +803,23 @@ int Statement(){
 int Declaration(){
     printf("got a Declaration\n");
     DecSpecifier();
-    next();  // move past specifier
+    ptr++;  // move past specifier
     Identifier();
-    next();  // move past identifier
+    ptr++;  // move past identifier
 
     Token t;
     identifyNextToken(&t);
-
+    GetToken(&t);
 
     if (strcmp(t.str, "=") == 0) {
         printf("    got assignment operator %s\n", t.str);
-        next();
+        ptr++;
         Expression();
         next();  // move to ;
     }
     symbol_table[symcount].funcorvar = "variable";
     identifyNextToken(&t);
-
+    GetToken(&t);
 
 
     symcount++;
@@ -824,27 +831,27 @@ int CompoundStatement(){        // declaration or statement
     // look ahead to see if to figure out if declaration or statement
     Token t;
     identifyNextToken(&t);
-
+    GetToken(&t);
     printf("(compstate)__%s: %s  [%d]\n", getType(t.type), t.str, ptr);
 
     if (strcmp(getType(t.type), "TYPE_TYPE") == 0){ // if type type, declaration
         ptr = ptr - t.length;
         printf("got type: %s  [%d]\n", t.str, ptr);
         Declaration();
-//        next();
+//        ptr++;
 //        printf("%s: %s  [%d]\n", getType(t.type), t.str, ptr);
     }
-    // do regular expressions
+        // do regular expressions
     else if (strcmp(getType(t.type), "TYPE_INTEGER") == 0 || strcmp(getType(t.type), "TYPE_FLOAT") == 0)
     {
         ptr = ptr - t.length;
         printf("got an expression (no specifier)\n");
         Expression();
     }
-    else{
-        ptr = ptr - t.length;
-        Statement();
-    }
+//    else{
+//        ptr = ptr - t.length;
+//        Statement();
+//    }
 
 
 }
@@ -853,24 +860,24 @@ int Function(){
     ParameterList();
     Token t;
     identifyNextToken(&t);
-
+    GetToken(&t);
 
     while (strcmp(t.str,"{") != 0){     //move ahead to {
-        next();
+        ptr++;
         identifyNextToken(&t);
-
+        GetToken(&t);
     }
-    next(); // now move passed {
+    ptr++; // now move passed {
 //    printf("__%s: %s  [%d]\n", getType(t.type), t.str, ptr);
 
     while (strcmp(t.str, "}") != 0){
-        next();
+        ptr++;
         CompoundStatement();
 
         identifyNextToken(&t);
-
+        GetToken(&t);
     }
-    next();
+//    ptr++;
     printf("Func_%s: %s  [%d]\n", getType(t.type), t.str, ptr);
 
 }
@@ -882,25 +889,25 @@ int Program(){
 
         int saveptr = ptr;
         DecSpecifier();
-        next();  // move passed specifier
+        ptr++;  // move passed specifier
         Identifier();
-        next();
+        ptr++;
 
         Token t;
         identifyNextToken(&t);
-
+        GetToken(&t);
 
         if(strcmp(t.str, "(") == 0){
             symbol_table[symcount].funcorvar = "function";
             symcount++;
-            next();
+            ptr++;
             Function();
         }
         else {  // its a global
             ptr = saveptr;
             symglobal = 1;
             Declaration();
-            next();
+            ptr++;
         }
 //        break;
     }
@@ -920,7 +927,7 @@ int FindBracket(){
             if (strcmp(t.str, "{") == 0) {
 
                 bptr = ptr;
-                next();
+                ptr++;
                 count++;
 
                 FindBracket();
@@ -939,7 +946,7 @@ int FindBracket(){
             }
         }
 
-        next();
+        ptr++;
 
     }
 
