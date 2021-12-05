@@ -46,6 +46,7 @@ int symcount = 0;
 int localdec = 1;
 int sptr = 0;
 int globalflag = 0;
+int foundmain = 0;
 
 
 const char* getType(enum type t){
@@ -631,11 +632,16 @@ int Expression(){
 }
 
 void printtoken(){
-    int saveptr = ptr;
-    Token t;
-    identifyNextToken(&t);
-    printf("*__current token is: %s    [%d-%d]  %d\n", t.str, saveptr, ptr, input_length);
-    ptr = saveptr;
+    if (ptr > input_length){
+        printf("cannot print token since we are now out of bounds\n");
+    }
+    else {
+        int saveptr = ptr;
+        Token t;
+        identifyNextToken(&t);
+        printf("*__current token is: %s    [%d-%d]  %d\n", t.str, saveptr, ptr, input_length);
+        ptr = saveptr;
+    }
 }
 
 int matchnexttoken(char* str){
@@ -842,7 +848,6 @@ int whileStatement(){
 
 int Statement(){
     printf("entering statement\n");
-    printtoken();
 
     if(match("if", TYPE_RESERVED)) {
         tonexttoken();
@@ -917,8 +922,6 @@ int Function(){
     while (!matchnexttoken("}") && ptr < input_length){
         CompoundStatement();
     }
-    ptr--;
-    printtoken();
 
 }
 
@@ -927,7 +930,6 @@ int Declaration(){
     sptr = ptr;
     printf("got a Declaration\n");
     symbol_table[symcount].funcorvar = "variable";
-
     if (localdec){
         printf("local variable declaration\n");
         DecSpecifier();
@@ -935,11 +937,10 @@ int Declaration(){
         Identifier();
         next();
     }
-    else {
+    else {  // add expression to global variable
         symbol_table[symcount].value = Expression();
         next(); // move passed declaration closer ;
     }
-
     symcount++;
 
 }
@@ -947,7 +948,6 @@ int Declaration(){
 int Program(){
 
     while(ptr < input_length -1){
-
         DecSpecifier();
         next();  // move passed specifier
         Identifier();
@@ -955,21 +955,45 @@ int Program(){
 
         Token t;
         identifyNextToken(&t);
-
-
         if(strcmp(t.str, "(") == 0){
-            printf("got a function declaration\n");
+            printf("got function '%s' declaration\n", symbol_table[symcount].name);
             symbol_table[symcount].funcorvar = "function";
+
+            while(strcmp(symbol_table[symcount].name, "main") != 0){    // move passed by all non-main function
+                while (input_string[ptr] != '}' && ptr < input_length-1){                       // and still update symbol table
+                    ptr++;
+                }
+                if (ptr > input_length-2) {
+                    printf("    end of program\n");
+                    break;
+                }
+                printtoken();
+                next();     // move passed closing } from function block
+                symcount++;
+                DecSpecifier();
+                next();
+                Identifier();
+                next();
+                symbol_table[symcount].funcorvar = "function";
+
+            }// end of function while
             symcount++;
-            next();
+            if (ptr > input_length-2) {
+                printf("    end of program\n");
+                break;
+            }
+            next(); // moved passed opening ( before parameterlist call within function method
             Function();
-            break;
+//            printtoken();     // this should be } for closing functions
+            next();
+
         }
         else if (strcmp(t.str, "=") == 0 || strcmp(t.str, ";") == 0)
         {
             printf("    this is a global var declaration\n");
             next();
             localdec = 0;
+            int saveptr = ptr;      // this may cause problems later
             if (strcmp(t.str, ";") != 0) {
                 Declaration();
             }
@@ -978,10 +1002,10 @@ int Program(){
                 symbol_table[symcount].funcorvar = "variable";
                 symcount++;
             }
+            ptr = saveptr;
             localdec = 1;
         }
-    }
-
+    }// end of program while
 
 }
 
@@ -1036,7 +1060,7 @@ int main(int argc, char* argv[]) {
 
     input_file = fopen(input, "r");
     if (check_if_exist(input_file, input) == 0)         // if nothing can open, close program
-        exit(0);
+        exit(1);
 
     char read;
     read = fgetc(input_file);
@@ -1055,13 +1079,11 @@ int main(int argc, char* argv[]) {
     }
     input_string[input_length] = 0;
     fclose(input_file);
+//    printf("%d  %c\n", input_length, input_string[input_length]);
 
 
 //    Expression();
 //    FindBracket();
-//    printf("%d", FindBracket());
-//    printf("%d\n", ptr);
-
     Program();
 
 //    printf("\n");
