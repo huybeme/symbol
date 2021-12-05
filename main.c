@@ -393,7 +393,8 @@ int PrimaryExpression(){
     }
     else if (strcmp(getType(t.type), "TYPE_IDENTIFIER") == 0){
         if(getsymbol(t.str) >= 0){
-            printf("    pulling identifier value for expression");
+            printf("    pulling identifier value '%s = %d' for expression\n",
+                   symbol_table[getsymbol(t.str)].name, symbol_table[getsymbol(t.str)].value);
             next();
             globalflag = 0;
             return symbol_table[getsymbol(t.str)].value;
@@ -633,7 +634,7 @@ void printtoken(){
     int saveptr = ptr;
     Token t;
     identifyNextToken(&t);
-    printf("*__current token is: %s    [%d]\n", t.str, ptr);
+    printf("*__current token is: %s    [%d-%d]  %d\n", t.str, saveptr, ptr, input_length);
     ptr = saveptr;
 }
 
@@ -750,6 +751,7 @@ int ParameterList(){
 
 int ifStatement(){                  // did not handle single action statement if/else statements without {}
     printf("    if statement\n");
+    next();
     int flag = Expression();   // token will be at ( to express condition and be at {
     tonexttoken();  // move passed {
     ptr--;
@@ -776,13 +778,14 @@ int ifStatement(){                  // did not handle single action statement if
     else{
         printf("    if condition is false, flag value: %d\n", flag);    // currently, at opening { for if
 //        printf("%d\n", ptr);
-        while(input_string[ptr] != '}')
+        while(input_string[ptr] != '}') // pass through if statement
             next();
 //        printf("%d\n", ptr);
 
         tonexttoken();      // moved passed closing } from if statement
 
         if (match("else", TYPE_RESERVED)){
+            printf("    entering else statement\n");
             tonexttoken();  // brings you to opening {
             ptr--;
             next();
@@ -790,15 +793,56 @@ int ifStatement(){                  // did not handle single action statement if
                 Statement();
             }
             ptr--;
-
         }
+    }
 
+
+}
+
+int whileStatement(){
+    printf("    while statement\n");
+    next(); // move passed (
+    int flagptr = ptr;  // save ptr to after opening (
+    int flag = Expression();   // token will be at ( to express condition and be at {
+    int startptr = ptr;    // location is the opening bracket to while loop
+    tonexttoken();  // move passed {
+    ptr--;
+
+    while (!matchnexttoken("}")){   // complete what's inside of while
+        // moves ptr through while loop
+    }
+    int endptr = ptr;
+    printf("    got ptrs for while block %d %d; flag ptr: %d\n", startptr, endptr, flagptr);
+    ptr = startptr;
+
+    // if flag is false - skip while loop
+    if(!flag){
+        ptr = endptr;
+    }
+    else {
+        while (flag) {
+
+            while (!matchnexttoken("}")) {   // complete what's inside of while
+                Statement();
+            }
+            next();
+            ptr = flagptr;
+            flag = Expression();
+
+            if (flag) {
+                ptr = startptr;
+            } else {
+                ptr = endptr;
+                break;
+            }
+        }
     }
 
 }
 
 int Statement(){
     printf("entering statement\n");
+    printtoken();
 
     if(match("if", TYPE_RESERVED)) {
         tonexttoken();
@@ -811,6 +855,10 @@ int Statement(){
         ptr--;
         printf("exited if statement\n");
 
+    }
+    else if (match("while", TYPE_RESERVED)){
+        tonexttoken();
+        whileStatement();
     }
     else if(matchtype(TYPE_IDENTIFIER)){
         printf("handle statement identifier\n");
@@ -840,13 +888,13 @@ int Statement(){
 int CompoundStatement(){        // declaration or statement
     sptr=ptr;
 
-
     if (matchtype(TYPE_TYPE)){ // if type type, declaration
         Declaration();
         if(match("=", TYPE_OPERATOR)) {
             next();
-            Expression();
-        }
+            printf("    updating symbol '%s' value through expression\n", symbol_table[symcount-1].name);
+            symbol_table[symcount-1].value = Expression();  // decrement symcount because Declaration will
+        }                                                   // already increment before getting its value
     }
     // do regular expressions
     else if (matchtype(TYPE_INTEGER) || matchtype(TYPE_FLOAT))
@@ -855,7 +903,7 @@ int CompoundStatement(){        // declaration or statement
         Expression();
     }
     else{
-        printtoken();
+        printf("compound statement calls: ");
         Statement();
     }
 
@@ -866,9 +914,10 @@ int Function(){
     printf("got a function\n");
     ParameterList();
 
-    while (!matchnexttoken("}")){
+    while (!matchnexttoken("}") && ptr < input_length){
         CompoundStatement();
     }
+    ptr--;
     printtoken();
 
 }
@@ -887,7 +936,7 @@ int Declaration(){
         next();
     }
     else {
-        Expression();
+        symbol_table[symcount].value = Expression();
         next(); // move passed declaration closer ;
     }
 
@@ -897,7 +946,7 @@ int Declaration(){
 
 int Program(){
 
-    while(ptr < input_length){
+    while(ptr < input_length -1){
 
         DecSpecifier();
         next();  // move passed specifier
