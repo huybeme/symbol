@@ -49,6 +49,7 @@ int sptr = 0;
 int globalflag = 0;
 int bracket = 0;
 int foundmain = 0;
+int pass = 0;
 
 
 const char* getType(enum type t){
@@ -797,7 +798,7 @@ int ifStatement(){                  // did not handle single action statement if
             Statement();
         }
         //** fix nested if stuff here
-        printtoken();
+
         if (match("}", TYPE_OPERATOR)) {
             printf("    if statement complete\n");  // move passed }
             removesymbol(bracket);
@@ -905,17 +906,43 @@ int Statement(){
     }
     else if(matchtype(TYPE_IDENTIFIER)){
         printf("handle statement identifier\n");
-
         Token id;       // get token id to update symbol later
         identifyNextToken(&id);
 
         if (getsymbol(id.str) >= 0){
-            printf("    updating symbol '%s' value through expression\n", id.str);
             next();
             if(match("=", TYPE_OPERATOR)){
+                printf("    updating symbol '%s' value through expression\n", id.str);
                 next(); // moves passed =
                 globalflag = 1;
                 symbol_table[getsymbol(id.str)].value = Expression();
+            }
+            else if(match("(", TYPE_OPERATOR) && pass == 0) {
+                printf("    function '%s' called\n", id.str);
+                int saveptr = 0;
+                while (input_string[ptr] != ';')
+                    ptr++;
+                saveptr = ptr;
+                ptr = symbol_table[getsymbol(id.str)].scope1;
+                Function();
+                ptr = saveptr;
+            }
+            else if(match("(", TYPE_OPERATOR) && pass == 1) {
+                printf("    function '%s' called\n", id.str);
+                int saveptr = 0;
+                while (input_string[ptr] != ';')
+                    ptr++;
+                saveptr = ptr;
+                ptr = symbol_table[getsymbol(id.str)].scope1+1;
+                next();
+                while(input_string[ptr] != '}'){
+                    Statement();
+                    next();
+//                    printtoken();
+
+                }
+                ptr = saveptr;
+
             }
 
         }
@@ -950,12 +977,12 @@ int CompoundStatement(){        // declaration or statement
         Statement();
     }
 
-
 }
 
 int Function(){
     printf("got a function\n");
-    ParameterList();
+    if(!foundmain)
+        ParameterList();
 
     if (strcmp(symbol_table[symcount].name, "main") != 0){
         next(); // move passed opening {
@@ -971,13 +998,26 @@ int Function(){
         symbol_table[symcount].scope2 = ptr;
         symcount++;
     }
-    else {
-        symcount++;
+    else if (foundmain){
+        printf("    got function call\n");
         while (!matchnexttoken("}") && ptr < input_length) {
             CompoundStatement();
         }
+    }
+    else if (!foundmain) {  // maybe !foundmain here
+        printf("found main\n");
         foundmain = 1;
+        while (!matchnexttoken("}") && ptr < input_length) {
+            ptr++;
+            if (input_string[ptr] == '{') {
+                next(); // move passed nested {
+                while(input_string[ptr] != '}')
+                    ptr++;
+            }
+        }
         symbol_table[symcount].scope2 = ptr;
+        symcount++;
+        pass = 1;
     }
 //    removesymbol(bracket);
 
@@ -995,6 +1035,7 @@ int Declaration(){
         Identifier();
         next();
 //        printf("!__[%d] %c\n", bracket, input_string[bracket]);
+
         symbol_table[symcount].scope1 = bracket;
     }
     else {  // add expression to global variable
@@ -1049,6 +1090,35 @@ int Program(){
             localdec = 1;
         }
     }// end of program while
+
+    printf("\n|--------------------------------------------------------------------------------------|\n");
+    printf("Symbol Table (%d)\n", symcount);
+    for (int i = 0; i < symcount; i++){
+        printf("    %s\t%s\t%d\t[%d-%d]   \t\t%s\n", symbol_table[i].funcorvar, symbol_table[i].type,
+               symbol_table[i].value, symbol_table[i].scope1, symbol_table[i].scope2, symbol_table[i].name);
+    }
+    printf("\n|--------------------------------------------------------------------------------------|\n");
+
+
+    if (pass == 1){
+        ptr = symbol_table[getsymbol("main")].scope1 +1;
+        next();
+        while (ptr < input_length-1){
+            CompoundStatement();
+            next();
+            if(input_string[ptr] == '}')
+                break;
+        }
+        removesymbol(symbol_table[getsymbol("main")].scope1);
+    }
+
+    printf("\n|--------------------------------------------------------------------------------------|\n");
+    printf("Symbol Table (%d)\n", symcount);
+    for (int i = 0; i < symcount; i++){
+        printf("    %s\t%s\t%d\t[%d-%d]   \t\t%s\n", symbol_table[i].funcorvar, symbol_table[i].type,
+               symbol_table[i].value, symbol_table[i].scope1, symbol_table[i].scope2, symbol_table[i].name);
+    }
+    printf("\n|--------------------------------------------------------------------------------------|\n");
 
 }
 
@@ -1129,18 +1199,11 @@ int main(int argc, char* argv[]) {
 //    FindBracket();
     Program();
 
-//    printf("\n");
-//    int to[] = {80, 87, 68, 90, 96, 101, 29, 103, 184, 188};
-//    int at[] = {84, 80, 87, 68, 99, 96, 101, 29, 186, 184};
-//    for (int i = 0; i < 10; i++) {
-//        printf("%c  %c\n", input_string[to[i]], input_string[at[i]]);
+//    printf("Symbol Table (%d)\n", symcount);
+//    for (int i = 0; i < symcount; i++){
+//        printf("    %s\t%s\t%d\t[%d-%d]   \t\t%s\n", symbol_table[i].funcorvar, symbol_table[i].type,
+//               symbol_table[i].value, symbol_table[i].scope1, symbol_table[i].scope2, symbol_table[i].name);
 //    }
-
-    printf("Symbol Table (%d)\n", symcount);
-    for (int i = 0; i < symcount; i++){
-        printf("    %s\t%s\t%d\t[%d-%d]\t\t%s\n", symbol_table[i].funcorvar, symbol_table[i].type,
-               symbol_table[i].value, symbol_table[i].scope1, symbol_table[i].scope2, symbol_table[i].name);
-    }
 //    printf("__\n");
 //    for (int i = 0; i < symcount; i++){
 //        printf("    %s %s %s\n", symfov, symt, symn);
