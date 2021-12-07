@@ -34,7 +34,8 @@ FILE *input_file, *printout;
 struct Symbol{
     char name[100];         //num = 1
     char type[100];         //2
-    int scope;              //3
+    int scope1;              //3
+    int scope2;
     char* funcorvar;    //4
     int value;
 };
@@ -47,6 +48,7 @@ int localdec = 1;
 int sptr = 0;
 int globalflag = 0;
 int bracket = 0;
+int foundmain = 0;
 
 
 const char* getType(enum type t){
@@ -685,6 +687,27 @@ void addsymbol(Token t, int num){
 //    }
 }
 
+void removesymbol(int start){
+
+    int x = 1;
+    int num = 0;
+    for (int i = 0; i < symcount; i++){
+        if (symbol_table[i].scope1 == start){
+            symbol_table[i].value = symbol_table[i+x].value;
+            for(int j = 0; j < strlen(symbol_table[i+x].name); j++){
+                symbol_table[i].name[j] = symbol_table[i+x].name[j];
+            }
+            symbol_table[i].name[strlen(symbol_table[i+x].name)] = '\0';
+
+            symbol_table[i].funcorvar = symbol_table[i+x].funcorvar;
+            symbol_table[i].scope1 = symbol_table[i+x].scope1;
+            x++;
+            num++;
+        }
+    }
+    symcount -= num;
+}
+
 int getsymbol(char* id){
 
     for(int i = 0; i < symcount; i++){
@@ -752,7 +775,9 @@ int ParameterList(){
         identifyNextToken(&t);
         next();
     }
+    symbol_table[symcount].scope1 = ptr;
     bracket = ptr;
+
     printf("    (finished parameter list for function %s\n", t.str);    // next() will leave ptr before {
 }
 
@@ -771,10 +796,11 @@ int ifStatement(){                  // did not handle single action statement if
         while(!matchnexttoken("}")){
             Statement();
         }
-                            //** fix nested if stuff here
+        //** fix nested if stuff here
         printtoken();
         if (match("}", TYPE_OPERATOR)) {
             printf("    if statement complete\n");  // move passed }
+            removesymbol(bracket);
             next();
         }
         if(match("else", TYPE_RESERVED)){
@@ -804,6 +830,7 @@ int ifStatement(){                  // did not handle single action statement if
             while(!matchnexttoken("}")){
                 Statement();
             }
+            removesymbol(bracket);
             ptr--;
         }
     }
@@ -838,6 +865,7 @@ int whileStatement(){
 
             while (!matchnexttoken("}")) {   // complete what's inside of while
                 Statement();
+                removesymbol(bracket);
             }
             next();
             ptr = flagptr;
@@ -851,6 +879,7 @@ int whileStatement(){
             }
         }
     }
+
     bracket = savebracket;
 }
 
@@ -910,7 +939,7 @@ int CompoundStatement(){        // declaration or statement
             symbol_table[symcount-1].value = Expression();  // decrement symcount because Declaration will
         }                                                   // already increment before getting its value
     }
-    // do regular expressions
+        // do regular expressions
     else if (matchtype(TYPE_INTEGER) || matchtype(TYPE_FLOAT))
     {
         printf("got an expression (no specifier)\n");
@@ -927,11 +956,30 @@ int CompoundStatement(){        // declaration or statement
 int Function(){
     printf("got a function\n");
     ParameterList();
-//    printf("!__[%d] %c\n", ptr, input_string[ptr]);
 
-    while (!matchnexttoken("}") && ptr < input_length){
-        CompoundStatement();
+    if (strcmp(symbol_table[symcount].name, "main") != 0){
+        next(); // move passed opening {
+        printf("did not find main yet, move pass function\n");
+        while(input_string[ptr] != '}') {
+            if (input_string[ptr] == '{') {
+                next(); // move passed nested {
+                while(input_string[ptr] != '}')
+                    ptr++;
+            }
+            ptr++;
+        }
+        symbol_table[symcount].scope2 = ptr;
+        symcount++;
     }
+    else {
+        symcount++;
+        while (!matchnexttoken("}") && ptr < input_length) {
+            CompoundStatement();
+        }
+        foundmain = 1;
+        symbol_table[symcount].scope2 = ptr;
+    }
+//    removesymbol(bracket);
 
 }
 
@@ -947,7 +995,7 @@ int Declaration(){
         Identifier();
         next();
 //        printf("!__[%d] %c\n", bracket, input_string[bracket]);
-        symbol_table[symcount].scope = bracket;
+        symbol_table[symcount].scope1 = bracket;
     }
     else {  // add expression to global variable
         symbol_table[symcount].value = Expression();
@@ -968,34 +1016,10 @@ int Program(){
 
         Token t;
         identifyNextToken(&t);
-        symbol_table[symcount].scope = -2;
+
         if(strcmp(t.str, "(") == 0){
             printf("got function '%s' declaration\n", symbol_table[symcount].name);
             symbol_table[symcount].funcorvar = "function";
-
-            while(strcmp(symbol_table[symcount].name, "main") != 0){    // move passed by all non-main function
-                while (input_string[ptr] != '}' && ptr < input_length-1){                       // and still update symbol table
-                    ptr++;
-                }
-                next();     // move passed closing } from function block
-                if (ptr > input_length-2) {
-                    printf("    end of program\n");
-                    break;
-                }
-                symcount++;
-                DecSpecifier();
-                next();
-                Identifier();
-                next();
-                symbol_table[symcount].funcorvar = "function";
-
-            }// end of function while
-            symcount++;
-            if (ptr > input_length-2) {
-                printf("    end of program\n");
-                break;
-            }
-            bracket = ptr;
             next(); // moved passed opening ( before parameterlist call within function method
             Function();
 //            printtoken();     // this should be } for closing functions
@@ -1005,11 +1029,11 @@ int Program(){
         else if (strcmp(t.str, "=") == 0 || strcmp(t.str, ";") == 0)
         {
             printf("    this is a global var declaration\n");
-            bracket = ptr;
+//            bracket = ptr;
             next(); // move by = or ;
             localdec = 0;
             int saveptr = ptr;
-            symbol_table[symcount].scope = -1;
+            symbol_table[symcount].scope1 = -1;
             if (strcmp(t.str, "=") == 0) {
                 Declaration();
                 ptr = saveptr;
@@ -1114,7 +1138,8 @@ int main(int argc, char* argv[]) {
 
     printf("Symbol Table (%d)\n", symcount);
     for (int i = 0; i < symcount; i++){
-        printf("    %s\t%s\t%d\t[%d]\t%s\n", symbol_table[i].funcorvar, symbol_table[i].type, symbol_table[i].value, symbol_table[i].scope, symbol_table[i].name);
+        printf("    %s\t%s\t%d\t[%d-%d]\t\t%s\n", symbol_table[i].funcorvar, symbol_table[i].type,
+               symbol_table[i].value, symbol_table[i].scope1, symbol_table[i].scope2, symbol_table[i].name);
     }
 //    printf("__\n");
 //    for (int i = 0; i < symcount; i++){
