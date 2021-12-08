@@ -868,6 +868,7 @@ int whileStatement(){
                 Statement();
                 removesymbol(bracket);
             }
+
             next();
             ptr = flagptr;
             flag = Expression();
@@ -902,6 +903,7 @@ int Statement(){
     }
     else if (match("while", TYPE_RESERVED)){
         tonexttoken();
+        ptr--;
         whileStatement();
     }
     else if(matchtype(TYPE_IDENTIFIER)){
@@ -1165,7 +1167,7 @@ int FindBracket(){
 int main(int argc, char* argv[]) {
 
     // run provided file
-    char* input = "test.txt";
+    char* input = "test.c";
     input_file = fopen(input, "r");
 
     if (argv[1] != '\0')    // if something is passed through terminal
